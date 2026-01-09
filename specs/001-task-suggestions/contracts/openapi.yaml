@@ -1,0 +1,390 @@
+openapi: 3.0.3
+info:
+  title: Do Buddy Task Suggestions API
+  description: API for smart task suggestions based on user context
+  version: 1.0.0
+  contact:
+    name: Do Buddy Team
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://api.dobuddy.com/api/v1
+    description: Production server
+
+tags:
+  - name: context
+    description: User context management
+  - name: tasks
+    description: Task import and management
+  - name: suggestions
+    description: Task suggestions
+  - name: breakdown
+    description: Task breakdown into steps
+
+paths:
+  /context:
+    post:
+      tags:
+        - context
+      summary: Set user context
+      description: Provide user's available time, energy level, and optional emotional state
+      operationId: setUserContext
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserContextRequest'
+      responses:
+        '200':
+          description: Context set successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tasks/import:
+    post:
+      tags:
+        - tasks
+      summary: Import todo list
+      description: Import tasks from text file (one task per line)
+      operationId: importTasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportTasksRequest'
+      responses:
+        '200':
+          description: Tasks imported successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportTasksResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /suggestions:
+    post:
+      tags:
+        - suggestions
+      summary: Get task suggestion
+      description: Get a task suggestion based on user context and imported tasks
+      operationId: getSuggestion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuggestionRequest'
+      responses:
+        '200':
+          description: Task suggestion returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuggestionResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: AI service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /suggestions/alternative:
+    post:
+      tags:
+        - suggestions
+      summary: Get alternative task suggestion
+      description: Get a different task suggestion, avoiding recently suggested tasks
+      operationId: getAlternativeSuggestion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlternativeSuggestionRequest'
+      responses:
+        '200':
+          description: Alternative task suggestion returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuggestionResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: AI service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tasks/{task_id}/breakdown:
+    post:
+      tags:
+        - breakdown
+      summary: Break task into steps
+      description: Generate actionable steps for an accepted task using AI
+      operationId: breakdownTask
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Task identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BreakdownRequest'
+      responses:
+        '200':
+          description: Task breakdown returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BreakdownResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: AI service error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    UserContextRequest:
+      type: object
+      required:
+        - available_time_minutes
+        - energy_level
+      properties:
+        available_time_minutes:
+          type: integer
+          enum: [5, 10, 15, 30, 60]
+          description: Available time in minutes
+        energy_level:
+          type: string
+          enum: [low, medium, high]
+          description: Energy level
+        emotional_state:
+          type: string
+          nullable: true
+          description: Optional emotional state
+
+    ImportTasksRequest:
+      type: object
+      required:
+        - tasks
+      properties:
+        tasks:
+          type: array
+          items:
+            type: string
+          description: Array of task text (one per line from file)
+          minItems: 1
+          maxItems: 1000
+
+    SuggestionRequest:
+      type: object
+      required:
+        - user_context
+        - tasks
+      properties:
+        user_context:
+          $ref: '#/components/schemas/UserContextRequest'
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+          description: List of tasks to match against
+          minItems: 1
+
+    AlternativeSuggestionRequest:
+      type: object
+      required:
+        - user_context
+        - tasks
+        - excluded_task_ids
+      properties:
+        user_context:
+          $ref: '#/components/schemas/UserContextRequest'
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+        excluded_task_ids:
+          type: array
+          items:
+            type: string
+          description: Task IDs to exclude from suggestion
+
+    BreakdownRequest:
+      type: object
+      required:
+        - task_text
+        - user_context
+      properties:
+        task_text:
+          type: string
+          description: Task text to break down
+          maxLength: 1000
+        user_context:
+          $ref: '#/components/schemas/UserContextRequest'
+
+    Task:
+      type: object
+      required:
+        - id
+        - text
+      properties:
+        id:
+          type: string
+          description: Unique task identifier
+        text:
+          type: string
+          description: Task description
+          maxLength: 1000
+        inferred_duration_minutes:
+          type: integer
+          nullable: true
+          description: AI-inferred duration
+        inferred_energy_level:
+          type: string
+          enum: [low, medium, high]
+          nullable: true
+          description: AI-inferred energy requirement
+        inferred_emotional_fit:
+          type: string
+          nullable: true
+          description: AI-inferred emotional fit
+        suggested_count:
+          type: integer
+          default: 0
+          description: Number of times suggested
+
+    TaskStep:
+      type: object
+      required:
+        - step_number
+        - description
+      properties:
+        step_number:
+          type: integer
+          minimum: 1
+          description: Sequential step number
+        description:
+          type: string
+          description: Step description
+          maxLength: 500
+        estimated_minutes:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Estimated time for step
+
+    SuggestionResponse:
+      type: object
+      required:
+        - task
+        - is_quick_win
+      properties:
+        task:
+          $ref: '#/components/schemas/Task'
+        is_quick_win:
+          type: boolean
+          description: Whether this is a generic quick win task
+        match_score:
+          type: number
+          format: float
+          nullable: true
+          description: AI match score (0-1)
+
+    BreakdownResponse:
+      type: object
+      required:
+        - steps
+      properties:
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskStep'
+          minItems: 1
+          description: Generated task steps
+
+    ImportTasksResponse:
+      type: object
+      required:
+        - tasks
+        - count
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+        count:
+          type: integer
+          description: Number of tasks imported
+
+    SuccessResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+        code:
+          type: string
+          description: Error code
+        details:
+          type: object
+          description: Additional error details
